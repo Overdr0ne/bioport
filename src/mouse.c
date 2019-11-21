@@ -8,171 +8,172 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <zephyr/types.h>
+#include <errno.h>
 #include <stddef.h>
 #include <string.h>
-#include <errno.h>
-#include <sys/printk.h>
 #include <sys/byteorder.h>
+#include <sys/printk.h>
 #include <zephyr.h>
+#include <zephyr/types.h>
 
 #include <bluetooth/bluetooth.h>
-#include <bluetooth/hci.h>
 #include <bluetooth/conn.h>
-#include <bluetooth/uuid.h>
 #include <bluetooth/gatt.h>
+#include <bluetooth/hci.h>
+#include <bluetooth/uuid.h>
+
+#include <usb/usb_device.h>
+#include <usb/class/usb_hid.h>
+
+#include "mouse.h"
 
 enum {
-	HIDS_REMOTE_WAKE = BIT(0),
-	HIDS_NORMALLY_CONNECTABLE = BIT(1),
+  HIDS_REMOTE_WAKE = BIT(0),
+  HIDS_NORMALLY_CONNECTABLE = BIT(1),
 };
 
 struct hids_info {
-	u16_t version; /* version number of base USB HID Specification */
-	u8_t code; /* country HID Device hardware is localized for. */
-	u8_t flags;
+  u16_t version; /* version number of base USB HID Specification */
+  u8_t code;     /* country HID Device hardware is localized for. */
+  u8_t flags;
 } __packed;
 
 struct hids_report {
-	u8_t id; /* report id */
-	u8_t type; /* report type */
+  u8_t id;   /* report id */
+  u8_t type; /* report type */
 } __packed;
 
 static struct hids_info info = {
-	.version = 0x0000,
-	.code = 0x00,
-	.flags = HIDS_NORMALLY_CONNECTABLE,
+    .version = 0x0000,
+    .code = 0x00,
+    .flags = HIDS_NORMALLY_CONNECTABLE,
 };
 
 enum {
-	HIDS_INPUT = 0x01,
-	HIDS_OUTPUT = 0x02,
-	HIDS_FEATURE = 0x03,
+  HIDS_INPUT = 0x01,
+  HIDS_OUTPUT = 0x02,
+  HIDS_FEATURE = 0x03,
 };
 
 static struct hids_report input = {
-	.id = 0x01,
-	.type = HIDS_INPUT,
+    .id = 0x01,
+    .type = HIDS_INPUT,
 };
+
+#define BCNT 3
 
 static u8_t simulate_input;
 static u8_t ctrl_point;
 static u8_t report_map[] = {
-	0x05, 0x01, /* Usage Page (Generic Desktop Ctrls) */
-	0x09, 0x02, /* Usage (Mouse) */
-	0xA1, 0x01, /* Collection (Application) */
-	0x09, 0x01, /*   Usage (Pointer) */
-	0xA1, 0x00, /*   Collection (Physical) */
-	0x05, 0x09, /*     Usage Page (Button) */
-	0x19, 0x01, /*     Usage Minimum (0x01) */
-	0x29, 0x03, /*     Usage Maximum (0x03) */
-	0x15, 0x00, /*     Logical Minimum (0) */
-	0x25, 0x01, /*     Logical Maximum (1) */
-	0x95, 0x03, /*     Report Count (3) */
-	0x75, 0x01, /*     Report Size (1) */
-	0x81, 0x02, /*     Input (Data,Var,Abs,No Wrap,Linear,...) */
-	0x95, 0x01, /*     Report Count (1) */
-	0x75, 0x05, /*     Report Size (5) */
-	0x81, 0x03, /*     Input (Const,Var,Abs,No Wrap,Linear,...) */
-	0x05, 0x01, /*     Usage Page (Generic Desktop Ctrls) */
-	0x09, 0x30, /*     Usage (X) */
-	0x09, 0x31, /*     Usage (Y) */
-	0x15, 0x81, /*     Logical Minimum (129) */
-	0x25, 0x7F, /*     Logical Maximum (127) */
-	0x75, 0x08, /*     Report Size (8) */
-	0x95, 0x02, /*     Report Count (2) */
-	0x81, 0x06, /*     Input (Data,Var,Rel,No Wrap,Linear,...) */
-	0xC0,       /*   End Collection */
-	0xC0,       /* End Collection */
+    HID_GI_USAGE_PAGE,     USAGE_GEN_DESKTOP,
+    HID_LI_USAGE,          USAGE_GEN_DESKTOP_MOUSE,
+    HID_MI_COLLECTION,     COLLECTION_APPLICATION,
+      HID_LI_USAGE,          USAGE_GEN_DESKTOP_POINTER,
+      HID_MI_COLLECTION,     COLLECTION_PHYSICAL,
+        HID_GI_USAGE_PAGE,     USAGE_GEN_BUTTON,
+        HID_LI_USAGE_MIN(1),   1,
+        HID_LI_USAGE_MAX(1),   BCNT,
+        HID_GI_LOGICAL_MIN(1), 0,
+        HID_GI_LOGICAL_MAX(1), 1,
+        HID_GI_REPORT_SIZE,    1,
+        HID_GI_REPORT_COUNT,   BCNT,
+        HID_MI_INPUT,          0x02,
+        HID_GI_REPORT_SIZE,    (8 - BCNT),
+        HID_GI_REPORT_COUNT,   1,
+
+        HID_MI_INPUT,          0x03,
+        HID_GI_USAGE_PAGE,     USAGE_GEN_DESKTOP,
+        HID_LI_USAGE,          USAGE_GEN_DESKTOP_X,
+        HID_LI_USAGE,          USAGE_GEN_DESKTOP_Y,
+        HID_LI_USAGE,          USAGE_GEN_DESKTOP_WHEEL,
+        HID_GI_LOGICAL_MIN(1), -127,
+        HID_GI_LOGICAL_MAX(1), 127,
+        HID_GI_REPORT_SIZE,    8,
+        HID_GI_REPORT_COUNT,   3,
+        HID_MI_INPUT,          0x02,
+      HID_MI_COLLECTION_END,
+    HID_MI_COLLECTION_END,
 };
 
-
-static ssize_t read_info(struct bt_conn *conn,
-			  const struct bt_gatt_attr *attr, void *buf,
-			  u16_t len, u16_t offset)
-{
-	return bt_gatt_attr_read(conn, attr, buf, len, offset, attr->user_data,
-				 sizeof(struct hids_info));
+static ssize_t read_info(struct bt_conn *conn, const struct bt_gatt_attr *attr,
+                         void *buf, u16_t len, u16_t offset) {
+  return bt_gatt_attr_read(conn, attr, buf, len, offset, attr->user_data,
+                           sizeof(struct hids_info));
 }
 
 static ssize_t read_report_map(struct bt_conn *conn,
-			       const struct bt_gatt_attr *attr, void *buf,
-			       u16_t len, u16_t offset)
-{
-	return bt_gatt_attr_read(conn, attr, buf, len, offset, report_map,
-				 sizeof(report_map));
+                               const struct bt_gatt_attr *attr, void *buf,
+                               u16_t len, u16_t offset) {
+  return bt_gatt_attr_read(conn, attr, buf, len, offset, report_map,
+                           sizeof(report_map));
 }
 
 static ssize_t read_report(struct bt_conn *conn,
-			   const struct bt_gatt_attr *attr, void *buf,
-			   u16_t len, u16_t offset)
-{
-	return bt_gatt_attr_read(conn, attr, buf, len, offset, attr->user_data,
-				 sizeof(struct hids_report));
+                           const struct bt_gatt_attr *attr, void *buf,
+                           u16_t len, u16_t offset) {
+  return bt_gatt_attr_read(conn, attr, buf, len, offset, attr->user_data,
+                           sizeof(struct hids_report));
 }
 
-static void input_ccc_changed(const struct bt_gatt_attr *attr, u16_t value)
-{
-	simulate_input = (value == BT_GATT_CCC_NOTIFY) ? 1 : 0;
+static void input_ccc_changed(const struct bt_gatt_attr *attr, u16_t value) {
+  simulate_input = (value == BT_GATT_CCC_NOTIFY) ? 1 : 0;
 }
 
 static ssize_t read_input_report(struct bt_conn *conn,
-				 const struct bt_gatt_attr *attr, void *buf,
-				 u16_t len, u16_t offset)
-{
-	return bt_gatt_attr_read(conn, attr, buf, len, offset, NULL, 0);
+                                 const struct bt_gatt_attr *attr, void *buf,
+                                 u16_t len, u16_t offset) {
+  return bt_gatt_attr_read(conn, attr, buf, len, offset, NULL, 0);
 }
 
 static ssize_t write_ctrl_point(struct bt_conn *conn,
-				const struct bt_gatt_attr *attr,
-				const void *buf, u16_t len, u16_t offset,
-				u8_t flags)
-{
-	u8_t *value = attr->user_data;
+                                const struct bt_gatt_attr *attr,
+                                const void *buf, u16_t len, u16_t offset,
+                                u8_t flags) {
+  u8_t *value = attr->user_data;
 
-	if (offset + len > sizeof(ctrl_point)) {
-		return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
-	}
+  if (offset + len > sizeof(ctrl_point)) {
+    return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
+  }
 
-	memcpy(value + offset, buf, len);
+  memcpy(value + offset, buf, len);
 
-	return len;
+  return len;
 }
 
 /* HID Service Declaration */
-BT_GATT_SERVICE_DEFINE(mouse_svc,
-	BT_GATT_PRIMARY_SERVICE(BT_UUID_HIDS),
-	BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_INFO, BT_GATT_CHRC_READ,
-			       BT_GATT_PERM_READ, read_info, NULL, &info),
-	BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_REPORT_MAP, BT_GATT_CHRC_READ,
-			       BT_GATT_PERM_READ, read_report_map, NULL, NULL),
-	BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_REPORT,
-			       BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
-			       BT_GATT_PERM_READ_AUTHEN,
-			       read_input_report, NULL, NULL),
-	BT_GATT_CCC(input_ccc_changed),
-	BT_GATT_DESCRIPTOR(BT_UUID_HIDS_REPORT_REF, BT_GATT_PERM_READ,
-			   read_report, NULL, &input),
-	BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_CTRL_POINT,
-			       BT_GATT_CHRC_WRITE_WITHOUT_RESP,
-			       BT_GATT_PERM_WRITE,
-			       NULL, write_ctrl_point, &ctrl_point),
-);
+BT_GATT_SERVICE_DEFINE(
+    mouse_svc, BT_GATT_PRIMARY_SERVICE(BT_UUID_HIDS),
+    BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_INFO, BT_GATT_CHRC_READ,
+                           BT_GATT_PERM_READ, read_info, NULL, &info),
+    BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_REPORT_MAP, BT_GATT_CHRC_READ,
+                           BT_GATT_PERM_READ, read_report_map, NULL, NULL),
+    BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_REPORT,
+                           BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
+                           BT_GATT_PERM_READ_AUTHEN, read_input_report, NULL,
+                           NULL),
+    BT_GATT_CCC(input_ccc_changed,
+                BT_GATT_PERM_READ_AUTHEN | BT_GATT_PERM_WRITE_AUTHEN),
+    BT_GATT_DESCRIPTOR(BT_UUID_HIDS_REPORT_REF, BT_GATT_PERM_READ, read_report,
+                       NULL, &input),
+    BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_CTRL_POINT,
+                           BT_GATT_CHRC_WRITE_WITHOUT_RESP, BT_GATT_PERM_WRITE,
+                           NULL, write_ctrl_point, &ctrl_point), );
 
-void mouse_init(void)
-{
-}
+void mouse_init(void) {}
 
-int mouse_notify()
-{
-	int rc;
-	static u8_t mouse[3];
+int mouse_notify(struct mouse_status *status) {
+  int rc;
+  static s8_t mouse[3];
 
-	mouse[0] = 0x00; /* uint8, sensor contact */
-	mouse[1] = 0x0a;
-	mouse[2] = 0x0a;
+  mouse[0] = status->button; /* uint8, sensor contact */
+  mouse[1] = (s8_t)status->pos[0];
+  mouse[2] = (s8_t)status->pos[1];
 
-	rc = bt_gatt_notify(NULL, &mouse_svc.attrs[4], &mouse, sizeof(mouse));
+  rc = bt_gatt_notify(NULL, &mouse_svc.attrs[4], &mouse, sizeof(mouse));
+  /* printk("mouse notify: %i %i\n", status->pos[0], status->pos[1]); */
+  /* rc = bt_gatt_notify(NULL, &mouse_svc.attrs[4], status, */
+  /*                     sizeof(struct mouse_status)); */
+  printk("%i\n", rc);
 
-	return rc == -ENOTCONN ? 0 : rc;
+  return rc == -ENOTCONN ? 0 : rc;
 }
