@@ -18,6 +18,6 @@
 #define ANALOG_BUFFER_SIZE 6
 
 struct device *init_adc(s16_t *m_sample_buffer);
-void check_samples(int expected_count, s16_t *m_sample_buffer);
+void adc_print_samples(int expected_count, s16_t *m_sample_buffer);
 
 #endif // __ANALOG_H_

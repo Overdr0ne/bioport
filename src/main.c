@@ -38,6 +38,13 @@ void main(void) {
   struct device *mpu_dev;
   struct device *adc_dev;
   static s16_t m_sample_buffer[ANALOG_BUFFER_SIZE];
+  const struct adc_sequence sequence = {
+      .channels = BIT(ADC_1ST_CHANNEL_ID),
+      /* .channels = BIT(ADC_2ND_CHANNEL_ID), */
+      .buffer = m_sample_buffer,
+      .buffer_size = sizeof(m_sample_buffer),
+      .resolution = ADC_RESOLUTION,
+  };
 
   ble_init();
 
@@ -53,29 +60,17 @@ void main(void) {
   mpu_dev = device_get_binding("MPU6050");
   mpu_init(mpu_dev);
 
-  adc_dev = init_adc(m_sample_buffer);
-  if (!adc_dev) {
-    return;
-  }
-  const struct adc_sequence sequence = {
-      .channels = BIT(ADC_1ST_CHANNEL_ID),
-      .buffer = m_sample_buffer,
-      .buffer_size = sizeof(m_sample_buffer),
-      .resolution = ADC_RESOLUTION,
-  };
-  ret = adc_read(adc_dev, &sequence);
-  if (!ret) {
-    printk("adc_read: error %d\n", ret);
-  }
+  /* adc_dev = init_adc(m_sample_buffer); */
+  /* if (!adc_dev) { */
+  /*   return; */
+  /* } */
 
   /* while (1) { */
+  /*   ret = adc_read(adc_dev, &sequence); */
+  /*   if (!ret) { */
+  /*     printk("adc_read: error %d\n", ret); */
+  /*   } */
   /*   k_sleep(MSEC_PER_SEC / 4); */
-  // read_temp(mpu_dev);
-  // adc_print_samples(1, m_sample_buffer);
-  /* printk("gyroy: %i.%i\n", gyroy.val1, gyroy.val2); */
-  /* printk("gyroz: %i.%i\n", gyroz.val1, gyroz.val2); */
-  /* if ((gyrox.val1 != 0) || (gyrox.val2 != 0)) { */
-  /*   mouse_notify(); */
-  /* } */
+  /*   adc_print_samples(1, m_sample_buffer); */
   /* } */
 }

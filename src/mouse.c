@@ -86,11 +86,14 @@ static u8_t report_map[] = {
         HID_LI_USAGE,          USAGE_GEN_DESKTOP_X,
         HID_LI_USAGE,          USAGE_GEN_DESKTOP_Y,
         HID_LI_USAGE,          USAGE_GEN_DESKTOP_WHEEL,
-        HID_GI_LOGICAL_MIN(1), -127,
-        HID_GI_LOGICAL_MAX(1), 127,
-        HID_GI_REPORT_SIZE,    8,
-        HID_GI_REPORT_COUNT,   3,
-        HID_MI_INPUT,          0x02,
+        HID_GI_LOGICAL_MIN(2), 0x01, 0x80, /* 2s comp -32767 */
+        HID_GI_LOGICAL_MAX(2), 0xff, 0x7f, /* 2s comp 32767 */
+        /* HID_GI_LOGICAL_MIN(2), 0xfe, 0x0c, /\* 2s comp -32767 *\/ */
+        /* HID_GI_LOGICAL_MAX(2), 0xf4, 0x01, /\* 2s comp 32767 *\/ */
+        HID_GI_REPORT_SIZE,    16,
+        HID_GI_REPORT_COUNT,   2,
+        HID_MI_INPUT,          0x06,
+        /* HID_MI_INPUT,          0x02, */
       HID_MI_COLLECTION_END,
     HID_MI_COLLECTION_END,
 };
@@ -159,21 +162,40 @@ BT_GATT_SERVICE_DEFINE(
                            BT_GATT_CHRC_WRITE_WITHOUT_RESP, BT_GATT_PERM_WRITE,
                            NULL, write_ctrl_point, &ctrl_point), );
 
+void serialize(struct mouse_status *status) {
+  status->packet[0] = (s8_t)status->button;
+  status->packet[1] = (s8_t)(status->pos[0]);
+  status->packet[2] = (s8_t)(status->pos[0] >> 8);
+  status->packet[3] = (s8_t)(status->pos[1]);
+  status->packet[4] = (s8_t)(status->pos[1] >> 8);
+}
+/* void serialize(struct mouse_status *status) { */
+/*   status->packet[0] = (s8_t)status->button; */
+/*   status->packet[1] = 0x7f; */
+/*   status->packet[2] = 0x7f; */
+/*   status->packet[3] = 0x7f; */
+/*   status->packet[4] = 0x7f; */
+/* } */
+
+void print_packet(struct mouse_status *status) {
+  int i;
+  for(i=0; i<sizeof(status->packet); i+=1) {
+    printk("%x ",status->packet[i]);
+  }
+  printk("\n\n");
+}
+
 void mouse_init(void) {}
 
 int mouse_notify(struct mouse_status *status) {
   int rc;
-  static s8_t mouse[3];
+  static s8_t mouse[5];
 
-  mouse[0] = status->button; /* uint8, sensor contact */
-  mouse[1] = (s8_t)status->pos[0];
-  mouse[2] = (s8_t)status->pos[1];
+  serialize(status);
+  /* printk("%i %i\n", status->pos[0], status->pos[1]); */
+  /* print_packet(status); */
 
-  rc = bt_gatt_notify(NULL, &mouse_svc.attrs[4], &mouse, sizeof(mouse));
-  /* printk("mouse notify: %i %i\n", status->pos[0], status->pos[1]); */
-  /* rc = bt_gatt_notify(NULL, &mouse_svc.attrs[4], status, */
-  /*                     sizeof(struct mouse_status)); */
-  printk("%i\n", rc);
+  rc = bt_gatt_notify(NULL, &mouse_svc.attrs[4], status->packet, sizeof(status->packet));
 
   return rc == -ENOTCONN ? 0 : rc;
 }

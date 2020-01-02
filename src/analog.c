@@ -1,5 +1,7 @@
 #include "analog.h"
 
+const struct adc_sequence sequence;
+
 static const struct adc_channel_cfg m_1st_channel_cfg = {
     .gain = ADC_GAIN,
     .reference = ADC_REFERENCE,
@@ -47,7 +49,7 @@ struct device *init_adc(s16_t *m_sample_buffer) {
   return adc_dev;
 }
 
-void check_samples(int expected_count, s16_t *m_sample_buffer) {
+void adc_print_samples(int expected_count, s16_t *m_sample_buffer) {
   int i;
 
   printk("Samples read: ");

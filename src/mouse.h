@@ -23,6 +23,8 @@ extern "C" {
 struct mouse_status {
   u8_t button;
   s16_t pos[2];
+  s8_t packet[5];
+  unsigned packet_sz;
 };
 
 void mouse_init(void);
