@@ -85,7 +85,7 @@ static u8_t report_map[] = {
         HID_GI_USAGE_PAGE,     USAGE_GEN_DESKTOP,
         HID_LI_USAGE,          USAGE_GEN_DESKTOP_X,
         HID_LI_USAGE,          USAGE_GEN_DESKTOP_Y,
-        HID_LI_USAGE,          USAGE_GEN_DESKTOP_WHEEL,
+        /* HID_LI_USAGE,          USAGE_GEN_DESKTOP_WHEEL, */
         HID_GI_LOGICAL_MIN(2), 0x01, 0x80, /* 2s comp -32767 */
         HID_GI_LOGICAL_MAX(2), 0xff, 0x7f, /* 2s comp 32767 */
         /* HID_GI_LOGICAL_MIN(2), 0xfe, 0x0c, /\* 2s comp -32767 *\/ */
@@ -193,7 +193,7 @@ int mouse_notify(struct mouse_status *status) {
 
   serialize(status);
   /* printk("%i %i\n", status->pos[0], status->pos[1]); */
-  /* print_packet(status); */
+  print_packet(status);
 
   rc = bt_gatt_notify(NULL, &mouse_svc.attrs[4], status->packet, sizeof(status->packet));
 

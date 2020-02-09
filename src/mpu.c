@@ -74,25 +74,41 @@ void print_sensor(struct sensor_value *val) {
          val[1].val1, val[1].val2, val[2].val1, val[2].val2);
 }
 
-void scale_2_u16(struct sensor_value *val, s16_t *scaled) {
+/* void scale_2_u16(struct sensor_value *val, s16_t *scaled) { */
+/*   s32_t x, y, z; */
+
+/*   x = ((val[0].val1 - center_val[0].val1) * X_PIX_PER_INT_DIV) + */
+/*       ((val[0].val2 - center_val[0].val2) * X_PIX_PER_FRAC_DIV); */
+/*   scaled[0] = (s16_t)val[0].val1 / X_DIV_PER_PIX; */
+/*   scaled[0] *= 1.5; */
+/*   /\* printk("x: %i\n", x); *\/ */
+
+/*   y = ((val[1].val1 - center_val[1].val1) * Y_PIX_PER_INT_DIV) + */
+/*       ((val[1].val2 - center_val[1].val2) * Y_PIX_PER_FRAC_DIV); */
+/*   scaled[1] = (s16_t)val[1].val1 / Y_DIV_PER_PIX; */
+/*   scaled[1] *= 1.5; */
+/*   /\* printk("y: %i\n", y); *\/ */
+
+/*   z = ((val[2].val1 - center_val[2].val1) * Z_PIX_PER_INT_DIV) + */
+/*       ((val[2].val2 - center_val[2].val2) * Z_PIX_PER_FRAC_DIV); */
+/*   scaled[2] = (s16_t)val[2].val1; */
+/*   scaled[2] *= 1.5; */
+/*   /\* printk("z: %i\n", z); *\/ */
+/* } */
+
+void sensor_2_u16(struct sensor_value *val, s16_t *scaled) {
   s32_t x, y, z;
 
-  x = ((val[0].val1 - center_val[0].val1) * X_PIX_PER_INT_DIV) +
-      ((val[0].val2 - center_val[0].val2) * X_PIX_PER_FRAC_DIV);
-  scaled[0] = (s16_t)val[0].val1 / X_DIV_PER_PIX;
-  scaled[0] *= 1.5;
+  scaled[0] = (s16_t)val[0].val1;
   /* printk("x: %i\n", x); */
 
-  y = ((val[1].val1 - center_val[1].val1) * Y_PIX_PER_INT_DIV) +
-      ((val[1].val2 - center_val[1].val2) * Y_PIX_PER_FRAC_DIV);
-  scaled[1] = (s16_t)val[1].val1 / Y_DIV_PER_PIX;
-  scaled[1] *= 1.5;
+  scaled[1] = (s16_t)val[1].val1;
   /* printk("y: %i\n", y); */
 
-  z = ((val[2].val1 - center_val[2].val1) * Z_PIX_PER_INT_DIV) +
-      ((val[2].val2 - center_val[2].val2) * Z_PIX_PER_FRAC_DIV);
+  /* z = ((val[2].val1 - center_val[2].val1) * Z_PIX_PER_INT_DIV) + */
+  /*     ((val[2].val2 - center_val[2].val2) * Z_PIX_PER_FRAC_DIV); */
+  /* scaled[2] = (s16_t)val[2].val1; */
   scaled[2] = (s16_t)val[2].val1;
-  scaled[2] *= 1.5;
   /* printk("z: %i\n", z); */
 }
 
@@ -110,41 +126,55 @@ void copy_sensor_val(struct sensor_value *from, struct sensor_value *to) {
   }
 }
 
-void complementary_filter(struct mpu_t *mpu) {
-  float pitch, roll, pitchAcc, rollAcc;
-  float dt = .1;
+/* void complementary_filter(struct mpu_t *mpu) { */
+/*   float pitch, roll, pitchAcc, rollAcc; */
+/*   float dt = .1; */
 
-  // Integrate the gyroscope data -> int(angularSpeed) = angle
-  pitch += (float)mpu->gyro[0] * dt; // Angle around the X-axis
-  roll -= (float)mpu->gyro[1] * dt; // Angle around the Y-axis
+/*   // Integrate the gyroscope data -> int(angularSpeed) = angle */
+/*   pitch += (float)mpu->gyro[0] * dt; // Angle around the X-axis */
+/*   roll -= (float)mpu->gyro[1] * dt; // Angle around the Y-axis */
 
-  // Compensate for drift with accelerometer data if !bullshit
-  // Sensitivity = -2 to 2 G at 16Bit -> 2G = 32768 && 0.5G = 8192
-  int forceMagnitudeApprox =
-      abs(mpu->acc[0]) + abs(mpu->acc[1]) + abs(mpu->acc[2]);
-  if (forceMagnitudeApprox > 8192 && forceMagnitudeApprox < 32768) {
-    // Turning around the X axis results in a vector on the Y-axis
-    pitchAcc = tan((float)mpu->acc[1], (float)mpu->acc[2]) * 180 / M_PI;
-    pitch = pitch * 0.98 + pitchAcc * 0.02;
+/*   // Compensate for drift with accelerometer data if !bullshit */
+/*   // Sensitivity = -2 to 2 G at 16Bit -> 2G = 32768 && 0.5G = 8192 */
+/*   int forceMagnitudeApprox = */
+/*       abs(mpu->acc[0]) + abs(mpu->acc[1]) + abs(mpu->acc[2]); */
+/*   if (forceMagnitudeApprox > 8192 && forceMagnitudeApprox < 32768) { */
+/*     // Turning around the X axis results in a vector on the Y-axis */
+/*     pitchAcc = tan((float)mpu->acc[1], (float)mpu->acc[2]) * 180 / M_PI; */
+/*     pitch = pitch * 0.98 + pitchAcc * 0.02; */
 
-    // Turning around the Y axis results in a vector on the X-axis
-    rollAcc = atan2f((float)mpu->acc[0], (float)mpu->acc[2]) * 180 / M_PI;
-    roll = roll * 0.98 + rollAcc * 0.02;
-  }
+/*     // Turning around the Y axis results in a vector on the X-axis */
+/*     rollAcc = atan2f((float)mpu->acc[0], (float)mpu->acc[2]) * 180 / M_PI; */
+/*     roll = roll * 0.98 + rollAcc * 0.02; */
+/*   } */
 
-  mpu->gyro[0] = pitch;
-  mpu->gyro[1] = roll;
-}
+/*   mpu->gyro[0] = pitch; */
+/*   mpu->gyro[1] = roll; */
+/* } */
 
-void mpu_filter(struct mpu_t *mpu) {
-  complementary_filter(mpu);
-}
+/* void mpu_filter(struct mpu_t *mpu) { */
+/*   complementary_filter(mpu); */
+/* } */
 
 void mpu_print(struct mpu_t *mpu) {
   printk("gyro: x: %i\ny: %i\nz: %i\n", mpu->gyro[0],mpu->gyro[1],mpu->gyro[2]);
 }
 
 /* void pre_filter_gyro(struct sensor_value *gyro_val) {} */
+
+void center(struct sensor_value *gyro) {
+	int i;
+	for(i=0; i<3; i+=1) {
+		gyro[i].val1 -= center_val[i].val1;
+		gyro[i].val2 -= center_val[i].val2;
+	}
+}
+
+void scale(s16_t *gyro) {
+	gyro[0] /= 1000;
+	gyro[1] /= 1000;
+	gyro[2] /= 1000;
+}
 
 void gyro_handler(struct device *dev, struct sensor_trigger *tr) {
   struct mpu_t mpu;
@@ -176,8 +206,10 @@ void gyro_handler(struct device *dev, struct sensor_trigger *tr) {
     start = false;
     goto finish;
   }
-  scale_2_u16(gyro_raw, mpu.gyro);
-  mpu_print(&mpu);
+  center(gyro_raw);
+  sensor_2_u16(gyro_raw, mpu.gyro);
+  scale(mpu.gyro);
+  /* mpu_print(&mpu); */
   /* scale_2_u16(acc_raw, mpu.acc); */
   /* mpu_filter(&mpu); */
 
