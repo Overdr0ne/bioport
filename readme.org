@@ -1,0 +1,10 @@
+#+TITLE: Bioport: a mobile bluetooth hid platform (WIP)
+
+* Introduction
+  The goal of bioport is to build a bluetooth HID platform for making everything from air-mice to chording keyboards. It is itself built on top of Zephyr OS.
+
+* Installation
+  TBC
+
+* To-Do
+** Integrate Invensense MPU
