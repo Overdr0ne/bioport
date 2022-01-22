@@ -1,0 +1,3 @@
+[submodule "cad"]
+	path = cad
+	url = git@github.com:Overdr0ne/bioport-cad.git
